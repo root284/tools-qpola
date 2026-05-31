@@ -45,6 +45,8 @@
   .tools-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem; }
   .tool-card { background: #fff; border: 1px solid #e5e5e5; border-radius: 12px; padding: 1.25rem; text-decoration: none; color: inherit; display: block; transition: box-shadow 0.15s, border-color 0.15s; position: relative; }
   .tool-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.08); border-color: #ccc; }
+  .tool-card.sortable-ghost { opacity: 0.3; }
+  .tool-card.sortable-drag { box-shadow: 0 8px 24px rgba(0,0,0,0.12); }
   .card-actions { position: absolute; top: 10px; right: 10px; display: flex; gap: 4px; opacity: 0; transition: opacity 0.1s; }
   .tool-card:hover .card-actions { opacity: 1; }
   .card-remove { font-size: 11px; color: #E24B4A; background: #fef2f2; border: none; border-radius: 5px; padding: 2px 7px; cursor: pointer; }
@@ -101,8 +103,9 @@
 
 <footer>© 2026 qpola.net</footer>
 
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 <script>
-const BUILTIN = [
+const BUILTIN_DEFAULT = [
   {
     name: '채널 대시보드',
     desc: '유튜브 채널 구독자, 조회수, 최신 영상 퍼포먼스 모니터링.',
@@ -115,32 +118,34 @@ const BUILTIN = [
 
 let pendingTool = null;
 let editingIdx = null;
-let customTools = [];
+let allTools = [];
 
-async function loadCustom() {
+async function loadTools() {
   const res = await fetch('/api/tools');
-  customTools = await res.json();
+  const saved = await res.json();
+  if (!saved.length) {
+    allTools = [...BUILTIN_DEFAULT];
+    await saveTools();
+  } else {
+    allTools = saved;
+  }
 }
 
-async function saveCustom() {
+async function saveTools() {
   await fetch('/api/tools', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(customTools),
+    body: JSON.stringify(allTools),
   });
 }
 
 function renderGrid() {
   const grid = document.getElementById('tools-grid');
-  const all = [...BUILTIN, ...customTools];
-
-  grid.innerHTML = all.map((t, i) => {
-    const isCustom = !t.builtin;
-    const customIdx = i - BUILTIN.length;
-    const actions = isCustom ? `
+  grid.innerHTML = allTools.map((t, i) => {
+    const actions = !t.builtin ? `
       <div class="card-actions">
-        <button class="card-edit" onclick="editTool(${customIdx}, event)">✎</button>
-        <button class="card-remove" onclick="removeTool(${customIdx}, event)">✕</button>
+        <button class="card-edit" onclick="editTool(${i}, event)">✎</button>
+        <button class="card-remove" onclick="removeTool(${i}, event)">✕</button>
       </div>` : '';
     const iconEl = t.icon
       ? `<div class="tool-icon">${t.icon}</div>`
@@ -148,7 +153,7 @@ function renderGrid() {
         ? `<img class="tool-favicon" src="${t.favicon}" alt="" onerror="this.style.visibility='hidden'" />`
         : `<div class="tool-icon">🔗</div>`;
     return `
-      <a class="tool-card" href="${t.url}" ${t.url.startsWith('http') ? 'target="_blank" rel="noopener"' : ''}>
+      <a class="tool-card" data-idx="${i}" href="${t.url}" ${t.url.startsWith('http') ? 'target="_blank" rel="noopener"' : ''}>
         ${actions}
         ${iconEl}
         <div class="tool-name">${t.name}</div>
@@ -161,8 +166,8 @@ function renderGrid() {
 async function removeTool(idx, e) {
   e.preventDefault();
   e.stopPropagation();
-  customTools.splice(idx, 1);
-  await saveCustom();
+  allTools.splice(idx, 1);
+  await saveTools();
   renderGrid();
 }
 
@@ -201,7 +206,7 @@ function cancelPreview() {
 function editTool(idx, e) {
   e.preventDefault();
   e.stopPropagation();
-  const t = customTools[idx];
+  const t = allTools[idx];
   editingIdx = idx;
   pendingTool = { url: t.url, favicon: t.favicon || '' };
   document.getElementById('p-favicon').src = t.favicon || '';
@@ -226,11 +231,11 @@ async function confirmAdd() {
     url: pendingTool.url,
   };
   if (editingIdx !== null) {
-    customTools[editingIdx] = tool;
+    allTools[editingIdx] = tool;
   } else {
-    customTools.push(tool);
+    allTools.push(tool);
   }
-  await saveCustom();
+  await saveTools();
   cancelPreview();
   renderGrid();
 }
@@ -256,7 +261,20 @@ document.getElementById('url-input').addEventListener('keydown', e => {
   if (e.key === 'Enter') fetchMeta();
 });
 
-loadCustom().then(renderGrid);
+loadTools().then(() => {
+  renderGrid();
+  Sortable.create(document.getElementById('tools-grid'), {
+    animation: 150,
+    ghostClass: 'sortable-ghost',
+    dragClass: 'sortable-drag',
+    onEnd: async () => {
+      const cards = [...document.querySelectorAll('.tool-card')];
+      allTools = cards.map(c => allTools[parseInt(c.dataset.idx)]);
+      renderGrid();
+      await saveTools();
+    },
+  });
+});
 </script>
 
 </body>
