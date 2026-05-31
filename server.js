@@ -6,6 +6,7 @@ const fetch = require('node-fetch');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const CHANNELS_FILE = path.join(__dirname, 'data', 'channels.json');
+const TOOLS_FILE = path.join(__dirname, 'data', 'tools.json');
 
 const DEFAULT_CHANNELS = [
   { handle: '@imjust5taku' },
@@ -31,6 +32,21 @@ function writeChannels(channels) {
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
+
+app.get('/api/tools', (req, res) => {
+  try {
+    if (!fs.existsSync(TOOLS_FILE)) return res.json([]);
+    res.json(JSON.parse(fs.readFileSync(TOOLS_FILE, 'utf8')));
+  } catch { res.json([]); }
+});
+
+app.post('/api/tools', (req, res) => {
+  const tools = req.body;
+  if (!Array.isArray(tools)) return res.status(400).json({ error: 'array expected' });
+  fs.mkdirSync(path.dirname(TOOLS_FILE), { recursive: true });
+  fs.writeFileSync(TOOLS_FILE, JSON.stringify(tools, null, 2));
+  res.json({ ok: true });
+});
 
 app.get('/api/channels', (req, res) => {
   res.json(readChannels());

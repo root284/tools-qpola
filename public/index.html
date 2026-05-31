@@ -115,20 +115,24 @@ const BUILTIN = [
 
 let pendingTool = null;
 let editingIdx = null;
+let customTools = [];
 
-function loadCustom() {
-  try { return JSON.parse(localStorage.getItem('qpola_tools') || '[]'); }
-  catch { return []; }
+async function loadCustom() {
+  const res = await fetch('/api/tools');
+  customTools = await res.json();
 }
 
-function saveCustom(tools) {
-  localStorage.setItem('qpola_tools', JSON.stringify(tools));
+async function saveCustom() {
+  await fetch('/api/tools', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(customTools),
+  });
 }
 
 function renderGrid() {
   const grid = document.getElementById('tools-grid');
-  const custom = loadCustom();
-  const all = [...BUILTIN, ...custom];
+  const all = [...BUILTIN, ...customTools];
 
   grid.innerHTML = all.map((t, i) => {
     const isCustom = !t.builtin;
@@ -154,12 +158,11 @@ function renderGrid() {
   }).join('');
 }
 
-function removeTool(idx, e) {
+async function removeTool(idx, e) {
   e.preventDefault();
   e.stopPropagation();
-  const custom = loadCustom();
-  custom.splice(idx, 1);
-  saveCustom(custom);
+  customTools.splice(idx, 1);
+  await saveCustom();
   renderGrid();
 }
 
@@ -198,8 +201,7 @@ function cancelPreview() {
 function editTool(idx, e) {
   e.preventDefault();
   e.stopPropagation();
-  const custom = loadCustom();
-  const t = custom[idx];
+  const t = customTools[idx];
   editingIdx = idx;
   pendingTool = { url: t.url, favicon: t.favicon || '' };
   document.getElementById('p-favicon').src = t.favicon || '';
@@ -212,7 +214,7 @@ function editTool(idx, e) {
   document.getElementById('p-title').focus();
 }
 
-function confirmAdd() {
+async function confirmAdd() {
   if (!pendingTool) return;
   const emoji = document.getElementById('p-emoji').value.trim();
   const tool = {
@@ -223,13 +225,12 @@ function confirmAdd() {
     tag: document.getElementById('p-tag').value.trim() || null,
     url: pendingTool.url,
   };
-  const custom = loadCustom();
   if (editingIdx !== null) {
-    custom[editingIdx] = tool;
+    customTools[editingIdx] = tool;
   } else {
-    custom.push(tool);
+    customTools.push(tool);
   }
-  saveCustom(custom);
+  await saveCustom();
   cancelPreview();
   renderGrid();
 }
@@ -255,7 +256,7 @@ document.getElementById('url-input').addEventListener('keydown', e => {
   if (e.key === 'Enter') fetchMeta();
 });
 
-renderGrid();
+loadCustom().then(renderGrid);
 </script>
 
 </body>
