@@ -1,12 +1,15 @@
 const express = require('express');
 const path = require('path');
-const fs = require('fs');
 const fetch = require('node-fetch');
+const { Pool } = require('pg');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const CHANNELS_FILE = path.join(__dirname, 'data', 'channels.json');
-const TOOLS_FILE = path.join(__dirname, 'data', 'tools.json');
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false,
+});
 
 const DEFAULT_CHANNELS = [
   { handle: '@imjust5taku' },
@@ -14,55 +17,56 @@ const DEFAULT_CHANNELS = [
   { handle: '@3UP-MOON' },
 ];
 
-function readChannels() {
-  try {
-    if (!fs.existsSync(CHANNELS_FILE)) return DEFAULT_CHANNELS;
-    const raw = fs.readFileSync(CHANNELS_FILE, 'utf8');
-    const parsed = JSON.parse(raw);
-    return parsed.length ? parsed : DEFAULT_CHANNELS;
-  } catch {
-    return DEFAULT_CHANNELS;
-  }
+async function initDb() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS storage (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    )
+  `);
 }
 
-function writeChannels(channels) {
-  fs.mkdirSync(path.dirname(CHANNELS_FILE), { recursive: true });
-  fs.writeFileSync(CHANNELS_FILE, JSON.stringify(channels, null, 2));
+async function getData(key, fallback) {
+  const result = await pool.query('SELECT value FROM storage WHERE key = $1', [key]);
+  if (!result.rows.length) return fallback;
+  return JSON.parse(result.rows[0].value);
+}
+
+async function setData(key, value) {
+  await pool.query(
+    'INSERT INTO storage (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2',
+    [key, JSON.stringify(value)]
+  );
 }
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-app.get('/api/tools', (req, res) => {
-  try {
-    if (!fs.existsSync(TOOLS_FILE)) return res.json([]);
-    res.json(JSON.parse(fs.readFileSync(TOOLS_FILE, 'utf8')));
-  } catch { res.json([]); }
+app.get('/api/tools', async (req, res) => {
+  try { res.json(await getData('tools', [])); }
+  catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.post('/api/tools', (req, res) => {
-  const tools = req.body;
-  if (!Array.isArray(tools)) return res.status(400).json({ error: 'array expected' });
-  fs.mkdirSync(path.dirname(TOOLS_FILE), { recursive: true });
-  fs.writeFileSync(TOOLS_FILE, JSON.stringify(tools, null, 2));
-  res.json({ ok: true });
+app.post('/api/tools', async (req, res) => {
+  if (!Array.isArray(req.body)) return res.status(400).json({ error: 'array expected' });
+  try { await setData('tools', req.body); res.json({ ok: true }); }
+  catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.get('/api/channels', (req, res) => {
-  res.json(readChannels());
+app.get('/api/channels', async (req, res) => {
+  try { res.json(await getData('channels', DEFAULT_CHANNELS)); }
+  catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.post('/api/channels', (req, res) => {
-  const channels = req.body;
-  if (!Array.isArray(channels)) return res.status(400).json({ error: 'array expected' });
-  writeChannels(channels);
-  res.json({ ok: true });
+app.post('/api/channels', async (req, res) => {
+  if (!Array.isArray(req.body)) return res.status(400).json({ error: 'array expected' });
+  try { await setData('channels', req.body); res.json({ ok: true }); }
+  catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.get('/api/meta', async (req, res) => {
   const { url } = req.query;
   if (!url) return res.status(400).json({ error: 'url required' });
-
   try {
     const target = url.startsWith('http') ? url : 'https://' + url;
     const response = await fetch(target, {
@@ -70,34 +74,32 @@ app.get('/api/meta', async (req, res) => {
       timeout: 8000,
     });
     const html = await response.text();
-
     const get = (pattern) => {
       const m = html.match(pattern);
       return m ? m[1].replace(/&amp;/g, '&').replace(/&quot;/g, '"').trim() : '';
     };
-
     const title =
       get(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i) ||
       get(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["']/i) ||
-      get(/<title[^>]*>([^<]+)<\/title>/i) ||
-      '';
-
+      get(/<title[^>]*>([^<]+)<\/title>/i) || '';
     const description =
       get(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i) ||
       get(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:description["']/i) ||
       get(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']/i) ||
-      get(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']description["']/i) ||
-      '';
-
+      get(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']description["']/i) || '';
     const { hostname } = new URL(target);
     const favicon = `https://www.google.com/s2/favicons?sz=64&domain_url=${hostname}`;
-
     res.json({ title, description, favicon, url: target });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`tools.qpola.net running at http://localhost:${PORT}`);
+initDb().then(() => {
+  app.listen(PORT, () => {
+    console.log(`tools.qpola.net running at http://localhost:${PORT}`);
+  });
+}).catch(err => {
+  console.error('DB init failed:', err.message);
+  process.exit(1);
 });
