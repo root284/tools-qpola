@@ -47,6 +47,9 @@
   .tool-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.08); border-color: #ccc; }
   .tool-card.sortable-ghost { opacity: 0.3; }
   .tool-card.sortable-drag { box-shadow: 0 8px 24px rgba(0,0,0,0.12); }
+  .drag-handle { position: absolute; bottom: 10px; right: 10px; cursor: grab; color: #ddd; font-size: 15px; user-select: none; }
+  .drag-handle:hover { color: #aaa; }
+  .drag-handle:active { cursor: grabbing; }
   .card-actions { position: absolute; top: 10px; right: 10px; display: flex; gap: 4px; opacity: 0; transition: opacity 0.1s; }
   .tool-card:hover .card-actions { opacity: 1; }
   .card-remove { font-size: 11px; color: #E24B4A; background: #fef2f2; border: none; border-radius: 5px; padding: 2px 7px; cursor: pointer; }
@@ -159,6 +162,7 @@ function renderGrid() {
         <div class="tool-name">${t.name}</div>
         <div class="tool-desc">${t.desc}</div>
         ${t.tag ? `<span class="tool-tag">${t.tag}</span>` : ''}
+        <span class="drag-handle">⠿</span>
       </a>`;
   }).join('');
 }
@@ -265,6 +269,7 @@ loadTools().then(() => {
   renderGrid();
   Sortable.create(document.getElementById('tools-grid'), {
     animation: 150,
+    handle: '.drag-handle',
     ghostClass: 'sortable-ghost',
     dragClass: 'sortable-drag',
     onEnd: async () => {

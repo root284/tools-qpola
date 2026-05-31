@@ -19,6 +19,9 @@
   .channel-card { background: #fff; border: 1px solid #e5e5e5; border-radius: 12px; padding: 1rem 1.25rem; }
   .channel-card.sortable-ghost { opacity: 0.3; }
   .channel-card.sortable-drag { box-shadow: 0 8px 24px rgba(0,0,0,0.12); }
+  .drag-handle { cursor: grab; color: #ccc; font-size: 16px; padding: 2px 4px; margin-right: 4px; user-select: none; flex-shrink: 0; }
+  .drag-handle:hover { color: #999; }
+  .drag-handle:active { cursor: grabbing; }
   .channel-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
   .channel-thumb { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; background: #eee; }
   .channel-name { font-size: 14px; font-weight: 600; }
@@ -166,6 +169,7 @@ async function loadChannel(idx) {
     }).join('');
     card.innerHTML = `
       <div class="channel-header">
+        <span class="drag-handle">⠿</span>
         <img class="channel-thumb" src="${thumb}" alt="${sn.title}" />
         <div>
           <div class="channel-name">${sn.title}</div>
@@ -234,6 +238,7 @@ async function refreshAll() {
 refreshAll().then(() => {
   Sortable.create(document.getElementById('channel-grid'), {
     animation: 150,
+    handle: '.drag-handle',
     ghostClass: 'sortable-ghost',
     dragClass: 'sortable-drag',
     onEnd: async () => {
