@@ -1,15 +1,35 @@
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
 const fetch = require('node-fetch');
-const { Pool } = require('pg');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false,
-});
+// Storage: Postgres if DATABASE_URL is set, otherwise file-based
+let usePostgres = false;
+let pool = null;
+
+if (process.env.DATABASE_URL) {
+  try {
+    const { Pool } = require('pg');
+    pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: { rejectUnauthorized: false },
+    });
+    usePostgres = true;
+    console.log('Using Postgres storage');
+  } catch (e) {
+    console.log('pg init failed, falling back to file storage:', e.message);
+  }
+} else {
+  console.log('No DATABASE_URL, using file storage');
+}
+
+// File storage paths (volume mount or local)
+const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
+const TOOLS_FILE = path.join(DATA_DIR, 'tools.json');
+const CHANNELS_FILE = path.join(DATA_DIR, 'channels.json');
 
 const DEFAULT_CHANNELS = [
   { handle: '@imjust5taku' },
@@ -17,6 +37,20 @@ const DEFAULT_CHANNELS = [
   { handle: '@3UP-MOON' },
 ];
 
+// --- File storage helpers ---
+function fileRead(filePath, fallback) {
+  try {
+    if (!fs.existsSync(filePath)) return fallback;
+    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  } catch { return fallback; }
+}
+
+function fileWrite(filePath, data) {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+}
+
+// --- Postgres helpers ---
 async function initDb() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS storage (
@@ -26,19 +60,30 @@ async function initDb() {
   `);
 }
 
-async function getData(key, fallback) {
-  const result = await pool.query('SELECT value FROM storage WHERE key = $1', [key]);
-  if (!result.rows.length) return fallback;
-  return JSON.parse(result.rows[0].value);
+async function dbGet(key, fallback) {
+  const r = await pool.query('SELECT value FROM storage WHERE key=$1', [key]);
+  return r.rows.length ? JSON.parse(r.rows[0].value) : fallback;
 }
 
-async function setData(key, value) {
+async function dbSet(key, value) {
   await pool.query(
-    'INSERT INTO storage (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2',
+    'INSERT INTO storage(key,value) VALUES($1,$2) ON CONFLICT(key) DO UPDATE SET value=$2',
     [key, JSON.stringify(value)]
   );
 }
 
+// --- Unified get/set ---
+async function getData(key, fallback) {
+  if (usePostgres) return dbGet(key, fallback);
+  return fileRead(key === 'channels' ? CHANNELS_FILE : TOOLS_FILE, fallback);
+}
+
+async function setData(key, value) {
+  if (usePostgres) return dbSet(key, value);
+  fileWrite(key === 'channels' ? CHANNELS_FILE : TOOLS_FILE, value);
+}
+
+// --- Express ---
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -95,11 +140,19 @@ app.get('/api/meta', async (req, res) => {
   }
 });
 
-initDb().then(() => {
+async function start() {
+  if (usePostgres) {
+    try {
+      await initDb();
+      console.log('Postgres ready');
+    } catch (e) {
+      console.log('Postgres connection failed, falling back to file storage:', e.message);
+      usePostgres = false;
+    }
+  }
   app.listen(PORT, () => {
-    console.log(`tools.qpola.net running at http://localhost:${PORT}`);
+    console.log(`tools.qpola.net running at http://localhost:${PORT} (storage: ${usePostgres ? 'postgres' : 'file'})`);
   });
-}).catch(err => {
-  console.error('DB init failed:', err.message);
-  process.exit(1);
-});
+}
+
+start();
