@@ -17,6 +17,8 @@
   .last-updated { font-size: 12px; color: #888; margin-bottom: 1rem; }
   .channel-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(480px, 1fr)); gap: 1rem; }
   .channel-card { background: #fff; border: 1px solid #e5e5e5; border-radius: 12px; padding: 1rem 1.25rem; }
+  .channel-card.sortable-ghost { opacity: 0.3; }
+  .channel-card.sortable-drag { box-shadow: 0 8px 24px rgba(0,0,0,0.12); }
   .channel-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
   .channel-thumb { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; background: #eee; }
   .channel-name { font-size: 14px; font-weight: 600; }
@@ -62,6 +64,7 @@
 <div class="last-updated" id="last-updated">업데이트 중...</div>
 <div class="channel-grid" id="channel-grid"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 <script>
 const API_KEY = 'AIzaSyBv2ONl3ancN96nOWOnoPBo2tw_WNFg3QU';
 
@@ -228,7 +231,25 @@ async function refreshAll() {
   document.getElementById('last-updated').textContent = '마지막 업데이트: ' + new Date().toLocaleTimeString('ko-KR');
 }
 
-refreshAll();
+refreshAll().then(() => {
+  Sortable.create(document.getElementById('channel-grid'), {
+    animation: 150,
+    ghostClass: 'sortable-ghost',
+    dragClass: 'sortable-drag',
+    onEnd: async () => {
+      const grid = document.getElementById('channel-grid');
+      const newOrder = [...grid.querySelectorAll('.channel-card')].map(card => {
+        const idx = parseInt(card.id.replace('card-', ''));
+        return channels[idx];
+      });
+      channels = newOrder;
+      newOrder.forEach((_, i) => {
+        grid.querySelectorAll('.channel-card')[i].id = 'card-' + i;
+      });
+      await saveChannels();
+    },
+  });
+});
 </script>
 </body>
 </html>
