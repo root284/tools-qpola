@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>tools.qpola.net</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; color: #111; min-height: 100vh; }
+  header { background: #fff; border-bottom: 1px solid #e5e5e5; padding: 1rem 2rem; display: flex; align-items: center; gap: 12px; }
+  .logo { font-size: 16px; font-weight: 700; color: #111; text-decoration: none; }
+  .logo span { color: #E24B4A; }
+  main { max-width: 960px; margin: 3rem auto; padding: 0 1.5rem; }
+  .hero { margin-bottom: 2rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+  .hero h1 { font-size: 28px; font-weight: 700; }
+
+  /* add bar */
+  .add-bar { display: flex; gap: 8px; align-items: center; min-width: 320px; }
+  .add-bar input { flex: 1; font-size: 13px; padding: 8px 12px; border: 1px solid #ddd; border-radius: 8px; outline: none; min-width: 0; }
+  .add-bar input:focus { border-color: #888; }
+  .add-bar button { font-size: 13px; padding: 8px 14px; border: 1px solid #ddd; border-radius: 8px; background: #fff; cursor: pointer; white-space: nowrap; }
+  .add-bar button:hover { background: #f0f0f0; }
+  .add-bar button.primary { background: #111; color: #fff; border-color: #111; }
+  .add-bar button.primary:hover { background: #333; }
+
+  /* preview card */
+  .preview-wrap { margin-bottom: 1.5rem; display: none; }
+  .preview-card { background: #fffbeb; border: 1px solid #fde68a; border-radius: 12px; padding: 1rem 1.25rem; display: flex; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+  .preview-icon-wrap { display: flex; flex-direction: column; align-items: center; gap: 6px; flex-shrink: 0; }
+  .preview-favicon { width: 36px; height: 36px; border-radius: 8px; object-fit: cover; background: #eee; }
+  .p-emoji-preview { width: 36px; height: 36px; font-size: 26px; display: flex; align-items: center; justify-content: center; border-radius: 8px; background: #f0f0f0; }
+  .p-emoji-input { width: 44px; font-size: 20px; text-align: center; border: 1px solid #e5d68a; border-radius: 6px; padding: 2px; background: #fff8d6; outline: none; cursor: text; }
+  .p-emoji-hint { font-size: 10px; color: #aaa; text-align: center; }
+  .preview-info { flex: 1; min-width: 180px; display: flex; flex-direction: column; gap: 5px; }
+  .preview-info input { font-size: 13px; border: 1px solid #e5d68a; border-radius: 6px; padding: 5px 8px; outline: none; background: #fff; width: 100%; }
+  .preview-info input::placeholder { color: #bbb; }
+  .preview-info input:focus { border-color: #b8a840; }
+  .p-tag-input { font-size: 12px !important; }
+  .preview-actions { display: flex; gap: 6px; flex-shrink: 0; align-self: center; }
+  .preview-actions button { font-size: 12px; padding: 6px 14px; border-radius: 7px; border: 1px solid #ddd; background: #fff; cursor: pointer; }
+  .preview-actions button.confirm { background: #111; color: #fff; border-color: #111; }
+  .preview-actions button.confirm:hover { background: #333; }
+  .preview-actions button.cancel:hover { background: #f0f0f0; }
+
+  .tools-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem; }
+  .tool-card { background: #fff; border: 1px solid #e5e5e5; border-radius: 12px; padding: 1.25rem; text-decoration: none; color: inherit; display: block; transition: box-shadow 0.15s, border-color 0.15s; position: relative; }
+  .tool-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.08); border-color: #ccc; }
+  .card-actions { position: absolute; top: 10px; right: 10px; display: flex; gap: 4px; opacity: 0; transition: opacity 0.1s; }
+  .tool-card:hover .card-actions { opacity: 1; }
+  .card-remove { font-size: 11px; color: #E24B4A; background: #fef2f2; border: none; border-radius: 5px; padding: 2px 7px; cursor: pointer; }
+  .card-edit { font-size: 11px; color: #555; background: #f0f0f0; border: none; border-radius: 5px; padding: 2px 7px; cursor: pointer; }
+  .tool-icon { font-size: 28px; margin-bottom: 12px; }
+  .tool-favicon { width: 32px; height: 32px; border-radius: 8px; object-fit: cover; background: #eee; margin-bottom: 12px; display: block; }
+  .tool-name { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+  .tool-desc { font-size: 13px; color: #888; line-height: 1.5; }
+  .tool-tag { display: inline-block; margin-top: 10px; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 4px; background: #f0f0f0; color: #555; }
+  .status-msg { font-size: 13px; color: #888; padding: 4px 0; }
+  footer { text-align: center; padding: 3rem 1rem; font-size: 12px; color: #aaa; }
+</style>
+</head>
+<body>
+
+<header>
+  <a class="logo" href="/"><span>▶</span> tools.qpola.net</a>
+</header>
+
+<main>
+  <div class="hero">
+    <h1>큐폴라 도구 모음</h1>
+    <div>
+      <div class="add-bar">
+        <input type="text" id="url-input" placeholder="URL 입력 후 추가" />
+        <button class="primary" onclick="fetchMeta()">+ 추가</button>
+      </div>
+      <div id="status-msg" class="status-msg" style="margin-top:6px;min-height:18px;"></div>
+    </div>
+  </div>
+
+  <div class="preview-wrap" id="preview-wrap">
+    <div class="preview-card">
+      <div class="preview-icon-wrap">
+        <img class="preview-favicon" id="p-favicon" src="" alt="" onerror="this.style.visibility='hidden'" />
+        <div class="p-emoji-preview" id="p-emoji-preview" style="display:none"></div>
+        <input class="p-emoji-input" id="p-emoji" type="text" placeholder="이모지 입력" maxlength="2" title="이모지로 대체 (선택)" oninput="onEmojiInput(this.value)" />
+        <span class="p-emoji-hint">파비콘 대체</span>
+      </div>
+      <div class="preview-info">
+        <input id="p-title" type="text" placeholder="도구 이름" />
+        <input id="p-desc" type="text" placeholder="설명 (선택)" />
+        <input id="p-tag" type="text" placeholder="태그 (선택, 예: YouTube, AI, Design)" class="p-tag-input" />
+      </div>
+      <div class="preview-actions">
+        <button class="cancel" onclick="cancelPreview()">취소</button>
+        <button class="confirm" onclick="confirmAdd()">추가</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="tools-grid" id="tools-grid"></div>
+</main>
+
+<footer>© 2026 qpola.net</footer>
+
+<script>
+const BUILTIN = [
+  {
+    name: '채널 대시보드',
+    desc: '유튜브 채널 구독자, 조회수, 최신 영상 퍼포먼스 모니터링.',
+    icon: '📊',
+    url: '/dashboard/',
+    tag: 'YouTube',
+    builtin: true,
+  },
+];
+
+let pendingTool = null;
+let editingIdx = null;
+
+function loadCustom() {
+  try { return JSON.parse(localStorage.getItem('qpola_tools') || '[]'); }
+  catch { return []; }
+}
+
+function saveCustom(tools) {
+  localStorage.setItem('qpola_tools', JSON.stringify(tools));
+}
+
+function renderGrid() {
+  const grid = document.getElementById('tools-grid');
+  const custom = loadCustom();
+  const all = [...BUILTIN, ...custom];
+
+  grid.innerHTML = all.map((t, i) => {
+    const isCustom = !t.builtin;
+    const customIdx = i - BUILTIN.length;
+    const actions = isCustom ? `
+      <div class="card-actions">
+        <button class="card-edit" onclick="editTool(${customIdx}, event)">✎</button>
+        <button class="card-remove" onclick="removeTool(${customIdx}, event)">✕</button>
+      </div>` : '';
+    const iconEl = t.icon
+      ? `<div class="tool-icon">${t.icon}</div>`
+      : t.favicon
+        ? `<img class="tool-favicon" src="${t.favicon}" alt="" onerror="this.style.visibility='hidden'" />`
+        : `<div class="tool-icon">🔗</div>`;
+    return `
+      <a class="tool-card" href="${t.url}" ${t.url.startsWith('http') ? 'target="_blank" rel="noopener"' : ''}>
+        ${actions}
+        ${iconEl}
+        <div class="tool-name">${t.name}</div>
+        <div class="tool-desc">${t.desc}</div>
+        ${t.tag ? `<span class="tool-tag">${t.tag}</span>` : ''}
+      </a>`;
+  }).join('');
+}
+
+function removeTool(idx, e) {
+  e.preventDefault();
+  e.stopPropagation();
+  const custom = loadCustom();
+  custom.splice(idx, 1);
+  saveCustom(custom);
+  renderGrid();
+}
+
+async function fetchMeta() {
+  const input = document.getElementById('url-input');
+  const url = input.value.trim();
+  if (!url) return;
+  setStatus('불러오는 중...');
+  try {
+    const res = await fetch('/api/meta?url=' + encodeURIComponent(url));
+    const data = await res.json();
+    if (data.error) { setStatus('오류: ' + data.error); return; }
+    pendingTool = data;
+    document.getElementById('p-favicon').src = data.favicon;
+    document.getElementById('p-favicon').style.visibility = 'visible';
+    document.getElementById('p-title').value = data.title || url;
+    document.getElementById('p-desc').value = data.description || '';
+    document.getElementById('p-emoji').value = '';
+    document.getElementById('p-tag').value = '';
+    document.getElementById('preview-wrap').style.display = 'block';
+    document.getElementById('p-title').focus();
+    setStatus('');
+    input.value = '';
+  } catch (e) {
+    setStatus('오류: ' + e.message);
+  }
+}
+
+function cancelPreview() {
+  pendingTool = null;
+  editingIdx = null;
+  document.getElementById('preview-wrap').style.display = 'none';
+  setStatus('');
+}
+
+function editTool(idx, e) {
+  e.preventDefault();
+  e.stopPropagation();
+  const custom = loadCustom();
+  const t = custom[idx];
+  editingIdx = idx;
+  pendingTool = { url: t.url, favicon: t.favicon || '' };
+  document.getElementById('p-favicon').src = t.favicon || '';
+  document.getElementById('p-favicon').style.visibility = t.favicon ? 'visible' : 'hidden';
+  document.getElementById('p-emoji').value = t.icon || '';
+  document.getElementById('p-title').value = t.name || '';
+  document.getElementById('p-desc').value = t.desc || '';
+  document.getElementById('p-tag').value = t.tag || '';
+  document.getElementById('preview-wrap').style.display = 'block';
+  document.getElementById('p-title').focus();
+}
+
+function confirmAdd() {
+  if (!pendingTool) return;
+  const emoji = document.getElementById('p-emoji').value.trim();
+  const tool = {
+    name: document.getElementById('p-title').value || pendingTool.url,
+    desc: document.getElementById('p-desc').value || '',
+    icon: emoji || null,
+    favicon: emoji ? null : pendingTool.favicon,
+    tag: document.getElementById('p-tag').value.trim() || null,
+    url: pendingTool.url,
+  };
+  const custom = loadCustom();
+  if (editingIdx !== null) {
+    custom[editingIdx] = tool;
+  } else {
+    custom.push(tool);
+  }
+  saveCustom(custom);
+  cancelPreview();
+  renderGrid();
+}
+
+function onEmojiInput(val) {
+  const favicon = document.getElementById('p-favicon');
+  const preview = document.getElementById('p-emoji-preview');
+  if (val.trim()) {
+    favicon.style.display = 'none';
+    preview.style.display = 'flex';
+    preview.textContent = val.trim();
+  } else {
+    favicon.style.display = '';
+    preview.style.display = 'none';
+  }
+}
+
+function setStatus(msg) {
+  document.getElementById('status-msg').textContent = msg;
+}
+
+document.getElementById('url-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') fetchMeta();
+});
+
+renderGrid();
+</script>
+
+</body>
+</html>
