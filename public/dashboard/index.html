@@ -85,6 +85,14 @@ function fmtShort(n) {
   return n.toLocaleString('ko-KR');
 }
 
+function fmtSubs(n) {
+  n = parseInt(n) || 0;
+  if (n >= 100000000) return (n/100000000).toFixed(1).replace(/\.0$/, '') + '억';
+  if (n >= 10000) return (n/10000).toFixed(1).replace(/\.0$/, '') + '만';
+  if (n >= 1000) return (n/1000).toFixed(1).replace(/\.0$/, '') + '천';
+  return n.toLocaleString('ko-KR');
+}
+
 function fmtDate(d) {
   const dt = new Date(d);
   const Y = dt.getFullYear();
@@ -178,7 +186,7 @@ async function loadChannel(idx) {
         <button class="remove-btn" onclick="removeChannel(${idx})">✕ 삭제</button>
       </div>
       <div class="channel-stats">
-        <div class="stat-box"><div class="stat-label">구독자</div><div class="stat-value">${fmt(s.subscriberCount)}</div></div>
+        <div class="stat-box"><div class="stat-label">구독자</div><div class="stat-value">${fmtSubs(s.subscriberCount)}</div></div>
         <div class="stat-box"><div class="stat-label">총 조회수</div><div class="stat-value">${fmt(s.viewCount)}</div></div>
         <div class="stat-box"><div class="stat-label">영상 수</div><div class="stat-value">${fmt(s.videoCount)}</div></div>
       </div>
