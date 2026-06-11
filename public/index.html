@@ -6,72 +6,184 @@
 <title>tools.qpola.net</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; color: #111; min-height: 100vh; }
-  header { background: #fff; border-bottom: 1px solid #e5e5e5; padding: 1rem 2rem; display: flex; align-items: center; gap: 12px; }
-  .logo { font-size: 16px; font-weight: 700; color: #111; text-decoration: none; }
-  .logo span { color: #E24B4A; }
-  main { max-width: 960px; margin: 3rem auto; padding: 0 1.5rem; }
-  .hero { margin-bottom: 2rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
-  .hero h1 { font-size: 28px; font-weight: 700; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #08080f;
+    color: #e8e8f0;
+    min-height: 100vh;
+    /* grid background */
+    background-image:
+      linear-gradient(rgba(120,80,255,0.06) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(120,80,255,0.06) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  /* ambient glow blobs */
+  body::before, body::after {
+    content: '';
+    position: fixed;
+    border-radius: 50%;
+    filter: blur(120px);
+    pointer-events: none;
+    z-index: 0;
+  }
+  body::before {
+    width: 600px; height: 600px;
+    background: rgba(108, 40, 255, 0.12);
+    top: -200px; left: -150px;
+  }
+  body::after {
+    width: 500px; height: 500px;
+    background: rgba(0, 200, 220, 0.08);
+    bottom: -150px; right: -100px;
+  }
+
+  header {
+    position: relative; z-index: 10;
+    background: rgba(12,12,20,0.85);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    padding: 1rem 2rem;
+    display: flex; align-items: center;
+  }
+  .logo {
+    font-size: 15px; font-weight: 700;
+    text-decoration: none;
+    background: linear-gradient(90deg, #a78bfa, #22d3ee);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    letter-spacing: -0.01em;
+  }
+
+  main { position: relative; z-index: 1; max-width: 980px; margin: 3rem auto; padding: 0 1.5rem; }
+
+  .hero { margin-bottom: 2.5rem; display: flex; align-items: center; justify-content: space-between; gap: 1.5rem; flex-wrap: wrap; }
+  .hero h1 {
+    font-size: 26px; font-weight: 700; letter-spacing: -0.02em;
+    background: linear-gradient(90deg, #fff 40%, #a78bfa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
 
   /* add bar */
-  .add-bar { display: flex; gap: 8px; align-items: center; min-width: 320px; }
-  .add-bar input { flex: 1; font-size: 13px; padding: 8px 12px; border: 1px solid #ddd; border-radius: 8px; outline: none; min-width: 0; }
-  .add-bar input:focus { border-color: #888; }
-  .add-bar button { font-size: 13px; padding: 8px 14px; border: 1px solid #ddd; border-radius: 8px; background: #fff; cursor: pointer; white-space: nowrap; }
-  .add-bar button:hover { background: #f0f0f0; }
-  .add-bar button.primary { background: #111; color: #fff; border-color: #111; }
-  .add-bar button.primary:hover { background: #333; }
+  .add-bar { display: flex; gap: 8px; align-items: center; min-width: 300px; }
+  .add-bar input {
+    flex: 1; font-size: 13px; padding: 8px 12px;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px; outline: none; min-width: 0;
+    background: rgba(255,255,255,0.05); color: #e8e8f0;
+  }
+  .add-bar input::placeholder { color: rgba(255,255,255,0.25); }
+  .add-bar input:focus { border-color: rgba(167,139,250,0.5); background: rgba(255,255,255,0.07); }
+  .add-bar button {
+    font-size: 13px; padding: 8px 14px;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px; background: rgba(255,255,255,0.05);
+    color: #ccc; cursor: pointer; white-space: nowrap;
+  }
+  .add-bar button:hover { background: rgba(255,255,255,0.1); }
+  .add-bar button.primary {
+    background: linear-gradient(135deg, #7c3aed, #0891b2);
+    border: none; color: #fff; font-weight: 600;
+  }
+  .add-bar button.primary:hover { opacity: 0.88; }
 
   /* preview card */
   .preview-wrap { margin-bottom: 1.5rem; display: none; }
-  .preview-card { background: #fffbeb; border: 1px solid #fde68a; border-radius: 12px; padding: 1rem 1.25rem; display: flex; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+  .preview-card {
+    background: rgba(167,139,250,0.07);
+    border: 1px solid rgba(167,139,250,0.25);
+    border-radius: 14px; padding: 1rem 1.25rem;
+    display: flex; align-items: flex-start; gap: 12px; flex-wrap: wrap;
+  }
   .preview-icon-wrap { display: flex; flex-direction: column; align-items: center; gap: 6px; flex-shrink: 0; }
-  .preview-favicon { width: 36px; height: 36px; border-radius: 8px; object-fit: cover; background: #eee; }
-  .p-emoji-preview { width: 36px; height: 36px; font-size: 26px; display: flex; align-items: center; justify-content: center; border-radius: 8px; background: #f0f0f0; }
-  .p-emoji-input { width: 44px; font-size: 20px; text-align: center; border: 1px solid #e5d68a; border-radius: 6px; padding: 2px; background: #fff8d6; outline: none; cursor: text; }
-  .p-emoji-hint { font-size: 10px; color: #aaa; text-align: center; }
+  .preview-favicon { width: 36px; height: 36px; border-radius: 8px; object-fit: cover; background: #222; }
+  .p-emoji-preview { width: 36px; height: 36px; font-size: 26px; display: flex; align-items: center; justify-content: center; border-radius: 8px; background: rgba(255,255,255,0.08); }
+  .p-emoji-input { width: 44px; font-size: 20px; text-align: center; border: 1px solid rgba(167,139,250,0.3); border-radius: 6px; padding: 2px; background: rgba(167,139,250,0.1); outline: none; cursor: text; color: #e8e8f0; }
+  .p-emoji-hint { font-size: 10px; color: rgba(255,255,255,0.3); text-align: center; }
   .preview-info { flex: 1; min-width: 180px; display: flex; flex-direction: column; gap: 5px; }
-  .preview-info input { font-size: 13px; border: 1px solid #e5d68a; border-radius: 6px; padding: 5px 8px; outline: none; background: #fff; width: 100%; }
-  .preview-info input::placeholder { color: #bbb; }
-  .preview-info input:focus { border-color: #b8a840; }
+  .preview-info input {
+    font-size: 13px; border: 1px solid rgba(255,255,255,0.1); border-radius: 6px;
+    padding: 6px 9px; outline: none; background: rgba(255,255,255,0.05); color: #e8e8f0; width: 100%;
+  }
+  .preview-info input::placeholder { color: rgba(255,255,255,0.2); }
+  .preview-info input:focus { border-color: rgba(167,139,250,0.5); }
   .p-tag-input { font-size: 12px !important; }
   .preview-actions { display: flex; gap: 6px; flex-shrink: 0; align-self: center; }
-  .preview-actions button { font-size: 12px; padding: 6px 14px; border-radius: 7px; border: 1px solid #ddd; background: #fff; cursor: pointer; }
-  .preview-actions button.confirm { background: #111; color: #fff; border-color: #111; }
-  .preview-actions button.confirm:hover { background: #333; }
-  .preview-actions button.cancel:hover { background: #f0f0f0; }
+  .preview-actions button {
+    font-size: 12px; padding: 6px 14px; border-radius: 7px;
+    border: 1px solid rgba(255,255,255,0.1);
+    background: rgba(255,255,255,0.05); color: #ccc; cursor: pointer;
+  }
+  .preview-actions button:hover { background: rgba(255,255,255,0.1); }
+  .preview-actions button.confirm {
+    background: linear-gradient(135deg, #7c3aed, #0891b2);
+    border: none; color: #fff; font-weight: 600;
+  }
+  .preview-actions button.confirm:hover { opacity: 0.88; }
 
+  /* grid */
   .tools-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem; }
-  .tool-card { background: #fff; border: 1px solid #e5e5e5; border-radius: 12px; padding: 1.25rem; text-decoration: none; color: inherit; display: block; transition: box-shadow 0.15s, border-color 0.15s; position: relative; }
-  .tool-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.08); border-color: #ccc; }
-  .tool-card.sortable-ghost { opacity: 0.3; }
-  .tool-card.sortable-drag { box-shadow: 0 8px 24px rgba(0,0,0,0.12); }
-  .drag-handle { position: absolute; bottom: 10px; right: 10px; cursor: grab; color: #ddd; font-size: 15px; user-select: none; }
-  .drag-handle:hover { color: #aaa; }
+
+  .tool-card {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 14px; padding: 1.25rem;
+    text-decoration: none; color: inherit; display: block;
+    position: relative;
+    transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+  }
+  .tool-card::before {
+    content: '';
+    position: absolute; inset: 0; border-radius: 14px;
+    background: linear-gradient(135deg, rgba(124,58,237,0.08), rgba(8,145,178,0.08));
+    opacity: 0; transition: opacity 0.2s;
+  }
+  .tool-card:hover {
+    border-color: rgba(167,139,250,0.35);
+    box-shadow: 0 0 0 1px rgba(167,139,250,0.15), 0 8px 32px rgba(108,40,255,0.15);
+    background: rgba(255,255,255,0.05);
+  }
+  .tool-card:hover::before { opacity: 1; }
+  .tool-card.sortable-ghost { opacity: 0.2; }
+  .tool-card.sortable-drag { box-shadow: 0 0 0 1px rgba(167,139,250,0.4), 0 16px 48px rgba(108,40,255,0.3); }
+
+  .drag-handle { position: absolute; bottom: 10px; right: 10px; cursor: grab; color: rgba(255,255,255,0.15); font-size: 15px; user-select: none; }
+  .drag-handle:hover { color: rgba(255,255,255,0.4); }
   .drag-handle:active { cursor: grabbing; }
-  .card-actions { position: absolute; top: 10px; right: 10px; display: flex; gap: 4px; opacity: 0; transition: opacity 0.1s; }
+
+  .card-actions { position: absolute; top: 10px; right: 10px; display: flex; gap: 4px; opacity: 0; transition: opacity 0.15s; }
   .tool-card:hover .card-actions { opacity: 1; }
-  .card-remove { font-size: 11px; color: #E24B4A; background: #fef2f2; border: none; border-radius: 5px; padding: 2px 7px; cursor: pointer; }
-  .card-edit { font-size: 11px; color: #555; background: #f0f0f0; border: none; border-radius: 5px; padding: 2px 7px; cursor: pointer; }
-  .tool-icon { font-size: 28px; margin-bottom: 12px; }
-  .tool-favicon { width: 32px; height: 32px; border-radius: 8px; object-fit: cover; background: #eee; margin-bottom: 12px; display: block; }
-  .tool-name { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
-  .tool-desc { font-size: 13px; color: #888; line-height: 1.5; }
-  .tool-tag { display: inline-block; margin-top: 10px; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 4px; background: #f0f0f0; color: #555; }
-  .status-msg { font-size: 13px; color: #888; padding: 4px 0; }
-  footer { text-align: center; padding: 3rem 1rem; font-size: 12px; color: #aaa; }
+  .card-remove { font-size: 11px; color: #f87171; background: rgba(248,113,113,0.1); border: none; border-radius: 5px; padding: 2px 7px; cursor: pointer; }
+  .card-edit { font-size: 11px; color: #a78bfa; background: rgba(167,139,250,0.1); border: none; border-radius: 5px; padding: 2px 7px; cursor: pointer; }
+
+  .tool-icon { font-size: 28px; margin-bottom: 14px; }
+  .tool-favicon { width: 32px; height: 32px; border-radius: 8px; object-fit: cover; background: #222; margin-bottom: 14px; display: block; }
+  .tool-name { font-size: 15px; font-weight: 600; margin-bottom: 5px; color: #f0f0fa; }
+  .tool-desc { font-size: 13px; color: rgba(255,255,255,0.4); line-height: 1.55; }
+  .tool-tag {
+    display: inline-block; margin-top: 12px; font-size: 11px; font-weight: 600;
+    padding: 2px 8px; border-radius: 4px;
+    background: rgba(167,139,250,0.12); color: #a78bfa;
+    border: 1px solid rgba(167,139,250,0.2);
+  }
+
+  .status-msg { font-size: 13px; color: rgba(255,255,255,0.35); padding: 4px 0; }
+  footer { position: relative; z-index: 1; text-align: center; padding: 3rem 1rem; font-size: 12px; color: rgba(255,255,255,0.15); }
 </style>
 </head>
 <body>
 
 <header>
-  <a class="logo" href="/"><span>▶</span> tools.qpola.net</a>
+  <a class="logo" href="/">▶ tools.qpola.net</a>
 </header>
 
 <main>
   <div class="hero">
-    <h1>큐폴라 도구 모음</h1>
+    <h1>큐폴라 AI 도구 모음</h1>
     <div>
       <div class="add-bar">
         <input type="text" id="url-input" placeholder="URL 입력 후 추가" />
