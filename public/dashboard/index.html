@@ -180,6 +180,22 @@
     font-size: 11px; color: rgba(0,200,180,0.5);
     padding: 20px 8px; letter-spacing: 0.05em;
   }
+  .channel-link { color: inherit; text-decoration: none; }
+  .channel-link:hover { color: #00c8b0; text-decoration: underline; }
+  .platform-badge { font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 3px; background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.4); border: 1px solid rgba(255,255,255,0.08); letter-spacing: 0.05em; }
+  .shortcut-link { font-size: 12px; color: rgba(0,200,180,0.7); text-decoration: none; padding: 10px 8px; display: inline-block; }
+  .shortcut-link:hover { color: #00c8b0; }
+  /* name prompt */
+  .name-prompt { display: none; padding: 8px 1.5rem; background: rgba(0,200,180,0.05); border-bottom: 1px solid rgba(0,200,180,0.12); gap: 8px; flex-wrap: wrap; align-items: center; }
+  .name-prompt.visible { display: flex; }
+  .name-prompt span { font-size: 12px; color: rgba(255,255,255,0.4); white-space: nowrap; }
+  .name-prompt input { flex: 1; min-width: 160px; font-size: 13px; padding: 5px 10px; border: 1px solid rgba(0,200,180,0.2); border-radius: 6px; background: rgba(0,0,0,0.3); color: #c8d8e8; outline: none; }
+  .name-prompt input:focus { border-color: rgba(0,200,180,0.4); }
+  .name-prompt button { font-size: 12px; padding: 5px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.05); color: #aaa; cursor: pointer; }
+  .name-prompt button.ok { background: rgba(0,200,180,0.15); border-color: rgba(0,200,180,0.3); color: #00c8b0; }
+  .name-prompt button.ok:hover { background: rgba(0,200,180,0.25); }
+  .toolbar-msg { font-size: 12px; color: #f87171; padding: 5px 1.5rem; display: none; }
+  .toolbar-msg.visible { display: block; }
 </style>
 </head>
 <body>
@@ -196,9 +212,16 @@
 </header>
 
 <div class="toolbar">
-  <input type="text" id="add-input" placeholder="채널 URL 또는 @핸들 입력" />
+  <input type="text" id="add-input" placeholder="유튜브 @핸들 또는 URL 입력" />
   <button onclick="addChannel()">+ 추가</button>
   <button class="refresh" onclick="refreshAll()">↻ 새로고침</button>
+</div>
+<div class="toolbar-msg" id="toolbar-msg"></div>
+<div class="name-prompt" id="name-prompt">
+  <span id="prompt-url-label"></span>
+  <input type="text" id="prompt-name" placeholder="채널 이름 입력" />
+  <button class="ok" onclick="confirmShortcut()">추가</button>
+  <button onclick="cancelShortcut()">취소</button>
 </div>
 
 <div class="summary-bar" id="summary-bar">
@@ -215,6 +238,48 @@
 const API_KEY = 'AIzaSyBv2ONl3ancN96nOWOnoPBo2tw_WNFg3QU';
 let channels = [];
 let channelDataCache = {};
+let pendingShortcut = null;
+
+function isYouTube(val) {
+  return val.startsWith('@') || /youtube\.com/i.test(val);
+}
+
+function platformLabel(url) {
+  if (/instagram\.com/i.test(url)) return 'Instagram';
+  if (/tiktok\.com/i.test(url)) return 'TikTok';
+  if (/twitter\.com|x\.com/i.test(url)) return 'X';
+  if (/facebook\.com/i.test(url)) return 'Facebook';
+  try { return new URL(url).hostname.replace('www.', ''); } catch { return url; }
+}
+
+function setToolbarMsg(msg) {
+  const el = document.getElementById('toolbar-msg');
+  el.textContent = msg;
+  el.classList.toggle('visible', !!msg);
+}
+
+function showNamePrompt(url) {
+  pendingShortcut = url;
+  document.getElementById('prompt-url-label').textContent = platformLabel(url) + ' —';
+  document.getElementById('prompt-name').value = '';
+  document.getElementById('name-prompt').classList.add('visible');
+  document.getElementById('prompt-name').focus();
+}
+
+function cancelShortcut() {
+  pendingShortcut = null;
+  document.getElementById('name-prompt').classList.remove('visible');
+}
+
+async function confirmShortcut() {
+  if (!pendingShortcut) return;
+  const name = document.getElementById('prompt-name').value.trim();
+  if (!name) { document.getElementById('prompt-name').focus(); return; }
+  channels.push({ handle: pendingShortcut, name, platform: platformLabel(pendingShortcut) });
+  cancelShortcut();
+  await saveChannels();
+  loadChannel(channels.length - 1);
+}
 
 function fmt(n) { return (parseInt(n) || 0).toLocaleString('ko-KR'); }
 
@@ -285,18 +350,45 @@ function getOrCreateCard(idx) {
   return card;
 }
 
+function errorCard(card, idx, msg) {
+  card.innerHTML = `
+    <div class="channel-header">
+      <span class="drag-handle">⠿</span>
+      <div style="flex:1"><div class="error">${msg}</div></div>
+      <button class="remove-btn" onclick="removeChannel(${idx})">✕ 삭제</button>
+    </div>`;
+}
+
 async function loadChannel(idx) {
   const ch = channels[idx];
   const card = getOrCreateCard(idx);
+
+  // 플랫폼 바로가기 카드
+  if (ch.platform) {
+    const url = ch.handle.startsWith('http') ? ch.handle : 'https://' + ch.handle;
+    card.innerHTML = `
+      <div class="channel-header">
+        <span class="drag-handle">⠿</span>
+        <div style="flex:1">
+          <a class="channel-name channel-link" href="${url}" target="_blank">${ch.name}</a>
+          <div class="channel-handle"><span class="platform-badge">${ch.platform}</span></div>
+        </div>
+        <button class="remove-btn" onclick="removeChannel(${idx})">✕ 삭제</button>
+      </div>
+      <a class="shortcut-link" href="${url}" target="_blank">채널 바로가기 →</a>`;
+    return;
+  }
+
   card.innerHTML = `<div class="loading-text">LOADING ${ch.handle}...</div>`;
   try {
     const data = await resolveChannel(ch.handle);
-    if (!data) { card.innerHTML = `<div class="error">채널을 찾을 수 없습니다: ${ch.handle}</div>`; return; }
+    if (!data) { errorCard(card, idx, `채널을 찾을 수 없습니다: ${ch.handle}`); return; }
     const uploadsId = data.contentDetails?.relatedPlaylists?.uploads || '';
     const { recent, avgViews, total } = await getVideos(uploadsId);
     const s = data.statistics;
     const sn = data.snippet;
     const thumb = sn.thumbnails?.default?.url || '';
+    const channelUrl = `https://www.youtube.com/channel/${data.id}`;
 
     channelDataCache[idx] = { subs: s.subscriberCount, views: s.viewCount, videoCount: s.videoCount };
     updateSummary();
@@ -321,9 +413,9 @@ async function loadChannel(idx) {
     card.innerHTML = `
       <div class="channel-header">
         <span class="drag-handle">⠿</span>
-        <img class="channel-thumb" src="${thumb}" alt="${sn.title}" />
+        <a href="${channelUrl}" target="_blank"><img class="channel-thumb" src="${thumb}" alt="${sn.title}" /></a>
         <div>
-          <div class="channel-name">${sn.title}</div>
+          <a class="channel-name channel-link" href="${channelUrl}" target="_blank">${sn.title}</a>
           <div class="channel-handle">${ch.handle}</div>
         </div>
         <button class="remove-btn" onclick="removeChannel(${idx})">✕ 삭제</button>
@@ -340,7 +432,7 @@ async function loadChannel(idx) {
         ${recent.length > 5 ? `<button class="more-btn" onclick="toggleVideos(${idx}, this)">▼ 더보기 (${recent.length - 5}개)</button>` : ''}
       </div>`;
   } catch(e) {
-    card.innerHTML = `<div class="error">오류: ${e.message}</div>`;
+    errorCard(card, idx, `오류: ${e.message}`);
   }
 }
 
@@ -372,8 +464,18 @@ async function addChannel() {
   const input = document.getElementById('add-input');
   const val = input.value.trim();
   if (!val) return;
+  setToolbarMsg('');
+
+  if (!isYouTube(val)) {
+    let url = val.startsWith('http') ? val : 'https://' + val;
+    try { new URL(url); } catch { setToolbarMsg('유효하지 않은 주소입니다.'); return; }
+    input.value = '';
+    showNamePrompt(url);
+    return;
+  }
+
   input.value = '';
-  const handle = val.startsWith('http') ? val : '@' + val.replace(/^@/, '');
+  const handle = '@' + val.replace(/^https?:\/\/(www\.)?youtube\.com\/@?/, '').replace(/^@/, '');
   channels.push({ handle });
   await saveChannels();
   loadChannel(channels.length - 1);
