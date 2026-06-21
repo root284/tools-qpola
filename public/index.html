@@ -156,6 +156,8 @@
   .drag-handle:hover { color: rgba(255,255,255,0.4); }
   .drag-handle:active { cursor: grabbing; }
 
+  .click-count { position: absolute; bottom: 10px; left: 14px; font-size: 10px; color: rgba(255,255,255,0.12); user-select: none; }
+
   .card-actions { position: absolute; top: 10px; right: 10px; display: flex; gap: 4px; opacity: 0; transition: opacity 0.15s; }
   .tool-card:hover .card-actions { opacity: 1; }
   .card-remove { font-size: 11px; color: #f87171; background: rgba(248,113,113,0.1); border: none; border-radius: 5px; padding: 2px 7px; cursor: pointer; }
@@ -235,6 +237,7 @@ const BUILTIN_DEFAULT = [
 let pendingTool = null;
 let editingIdx = null;
 let allTools = [];
+let clickCounts = {};
 
 async function loadTools() {
   const res = await fetch('/api/tools');
@@ -245,6 +248,17 @@ async function loadTools() {
   } else {
     allTools = saved;
   }
+}
+
+async function loadClicks() {
+  try {
+    const res = await fetch('/api/clicks');
+    clickCounts = await res.json();
+  } catch { clickCounts = {}; }
+}
+
+function recordClick(url) {
+  navigator.sendBeacon('/api/clicks', new Blob([JSON.stringify({ url })], { type: 'application/json' }));
 }
 
 async function saveTools() {
@@ -268,13 +282,15 @@ function renderGrid() {
       : t.favicon
         ? `<img class="tool-favicon" src="${t.favicon}" alt="" onerror="this.style.visibility='hidden'" />`
         : `<div class="tool-icon">🔗</div>`;
+    const count = clickCounts[t.url] || 0;
     return `
-      <a class="tool-card" data-idx="${i}" href="${t.url}" ${t.url.startsWith('http') ? 'target="_blank" rel="noopener"' : ''}>
+      <a class="tool-card" data-idx="${i}" href="${t.url}" onclick="recordClick('${t.url}')" ${t.url.startsWith('http') ? 'target="_blank" rel="noopener"' : ''}>
         ${actions}
         ${iconEl}
         <div class="tool-name">${t.name}</div>
         <div class="tool-desc">${t.desc}</div>
         ${t.tag ? `<span class="tool-tag">${t.tag}</span>` : ''}
+        ${count ? `<span class="click-count">${count}</span>` : ''}
         <span class="drag-handle">⠿</span>
       </a>`;
   }).join('');
@@ -378,7 +394,7 @@ document.getElementById('url-input').addEventListener('keydown', e => {
   if (e.key === 'Enter') fetchMeta();
 });
 
-loadTools().then(() => {
+Promise.all([loadTools(), loadClicks()]).then(() => {
   renderGrid();
   Sortable.create(document.getElementById('tools-grid'), {
     animation: 150,

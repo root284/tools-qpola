@@ -30,6 +30,7 @@ if (process.env.DATABASE_URL) {
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const TOOLS_FILE = path.join(DATA_DIR, 'tools.json');
 const CHANNELS_FILE = path.join(DATA_DIR, 'channels.json');
+const CLICKS_FILE = path.join(DATA_DIR, 'clicks.json');
 
 const DEFAULT_CHANNELS = [
   { handle: '@imjust5taku' },
@@ -73,14 +74,16 @@ async function dbSet(key, value) {
 }
 
 // --- Unified get/set ---
+const FILE_BY_KEY = { channels: CHANNELS_FILE, clicks: CLICKS_FILE, tools: TOOLS_FILE };
+
 async function getData(key, fallback) {
   if (usePostgres) return dbGet(key, fallback);
-  return fileRead(key === 'channels' ? CHANNELS_FILE : TOOLS_FILE, fallback);
+  return fileRead(FILE_BY_KEY[key] || TOOLS_FILE, fallback);
 }
 
 async function setData(key, value) {
   if (usePostgres) return dbSet(key, value);
-  fileWrite(key === 'channels' ? CHANNELS_FILE : TOOLS_FILE, value);
+  fileWrite(FILE_BY_KEY[key] || TOOLS_FILE, value);
 }
 
 // --- Express ---
@@ -96,6 +99,22 @@ app.post('/api/tools', async (req, res) => {
   if (!Array.isArray(req.body)) return res.status(400).json({ error: 'array expected' });
   try { await setData('tools', req.body); res.json({ ok: true }); }
   catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/clicks', async (req, res) => {
+  try { res.json(await getData('clicks', {})); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/clicks', async (req, res) => {
+  const { url } = req.body || {};
+  if (!url) return res.status(400).json({ error: 'url required' });
+  try {
+    const clicks = await getData('clicks', {});
+    clicks[url] = (clicks[url] || 0) + 1;
+    await setData('clicks', clicks);
+    res.json({ ok: true, count: clicks[url] });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.get('/api/channels', async (req, res) => {
