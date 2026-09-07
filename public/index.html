@@ -174,6 +174,49 @@
     border: 1px solid rgba(167,139,250,0.2);
   }
 
+  /* auth */
+  .auth-btn {
+    margin-left: auto; font-size: 12px; padding: 6px 12px; border-radius: 7px;
+    border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.05);
+    color: #ccc; cursor: pointer;
+  }
+  .auth-btn:hover { background: rgba(255,255,255,0.1); }
+
+  .lock-badge { position: absolute; top: 12px; right: 12px; font-size: 12px; opacity: 0.3; }
+  .tool-card.locked { cursor: pointer; }
+
+  .modal-backdrop {
+    position: fixed; inset: 0; z-index: 100; padding: 1.5rem;
+    background: rgba(4,4,10,0.75); backdrop-filter: blur(4px);
+    display: none; align-items: center; justify-content: center;
+  }
+  .modal-backdrop.open { display: flex; }
+  .modal {
+    background: #0f0f1a; border: 1px solid rgba(167,139,250,0.25);
+    border-radius: 16px; padding: 1.75rem; width: 100%; max-width: 340px;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.6);
+  }
+  .modal h2 { font-size: 16px; margin-bottom: 6px; }
+  .modal p { font-size: 12.5px; color: rgba(255,255,255,0.4); line-height: 1.6; margin-bottom: 16px; }
+  .modal input {
+    width: 100%; font-size: 14px; padding: 10px 12px; border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.05);
+    color: #e8e8f0; outline: none;
+  }
+  .modal input:focus { border-color: rgba(167,139,250,0.55); }
+  .modal-err { font-size: 12px; color: #f87171; min-height: 16px; margin-top: 8px; }
+  .modal-actions { display: flex; gap: 8px; margin-top: 10px; }
+  .modal-actions button {
+    flex: 1; font-size: 13px; padding: 9px; border-radius: 8px; cursor: pointer;
+    border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.05); color: #ccc;
+  }
+  .modal-actions button:hover { background: rgba(255,255,255,0.1); }
+  .modal-actions button.primary {
+    background: linear-gradient(135deg, #7c3aed, #0891b2);
+    border: none; color: #fff; font-weight: 600;
+  }
+  .modal-actions button.primary:hover { opacity: 0.88; }
+
   .status-msg { font-size: 13px; color: rgba(255,255,255,0.35); padding: 4px 0; }
   footer { position: relative; z-index: 1; text-align: center; padding: 3rem 1rem; font-size: 12px; color: rgba(255,255,255,0.15); }
 </style>
@@ -182,12 +225,13 @@
 
 <header>
   <a class="logo" href="/">▶ tools.qpola.net</a>
+  <button class="auth-btn" id="auth-btn">로그인</button>
 </header>
 
 <main>
   <div class="hero">
     <h1>큐폴라 AI 도구 모음</h1>
-    <div>
+    <div id="admin-bar" style="display:none">
       <div class="add-bar">
         <input type="text" id="url-input" placeholder="URL 입력 후 추가" />
         <button class="primary" onclick="fetchMeta()">+ 추가</button>
@@ -219,6 +263,19 @@
   <div class="tools-grid" id="tools-grid"></div>
 </main>
 
+<div class="modal-backdrop" id="login-modal">
+  <div class="modal">
+    <h2>🔒 로그인이 필요합니다</h2>
+    <p>도구를 사용하려면 사내 공용 비밀번호를 입력하세요.</p>
+    <input type="password" id="login-pw" placeholder="비밀번호" autocomplete="current-password" />
+    <div class="modal-err" id="login-err"></div>
+    <div class="modal-actions">
+      <button onclick="closeLogin()">취소</button>
+      <button class="primary" onclick="doLogin()">확인</button>
+    </div>
+  </div>
+</div>
+
 <footer>© 2026 qpola.net</footer>
 
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
@@ -237,12 +294,19 @@ const BUILTIN_DEFAULT = [
 let pendingTool = null;
 let editingIdx = null;
 let allTools = [];
-let clickCounts = {};
+let authed = false;
+
+async function loadSession() {
+  try {
+    const res = await fetch('/api/session');
+    authed = (await res.json()).authed;
+  } catch { authed = false; }
+}
 
 async function loadTools() {
   const res = await fetch('/api/tools');
   const saved = await res.json();
-  if (!saved.length) {
+  if (!saved.length && authed) {
     allTools = [...BUILTIN_DEFAULT];
     await saveTools();
   } else {
@@ -250,15 +314,49 @@ async function loadTools() {
   }
 }
 
-async function loadClicks() {
-  try {
-    const res = await fetch('/api/clicks');
-    clickCounts = await res.json();
-  } catch { clickCounts = {}; }
-}
-
 function recordClick(url) {
   navigator.sendBeacon('/api/clicks', new Blob([JSON.stringify({ url })], { type: 'application/json' }));
+}
+
+function openLogin() {
+  document.getElementById('login-err').textContent = '';
+  document.getElementById('login-modal').classList.add('open');
+  document.getElementById('login-pw').focus();
+}
+
+function closeLogin() {
+  document.getElementById('login-modal').classList.remove('open');
+  document.getElementById('login-pw').value = '';
+}
+
+async function doLogin() {
+  const err = document.getElementById('login-err');
+  err.textContent = '';
+  try {
+    const res = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: document.getElementById('login-pw').value }),
+    });
+    if (res.ok) { location.href = '/'; return; }
+    err.textContent = res.status === 503
+      ? '서버에 비밀번호가 설정되지 않았습니다.'
+      : '비밀번호가 올바르지 않습니다.';
+  } catch (e) {
+    err.textContent = '오류: ' + e.message;
+  }
+}
+
+async function doLogout() {
+  await fetch('/api/logout', { method: 'POST' });
+  location.href = '/';
+}
+
+function applyAuthUI() {
+  document.getElementById('admin-bar').style.display = authed ? '' : 'none';
+  const btn = document.getElementById('auth-btn');
+  btn.textContent = authed ? '로그아웃' : '로그인';
+  btn.onclick = authed ? doLogout : openLogin;
 }
 
 async function saveTools() {
@@ -272,7 +370,7 @@ async function saveTools() {
 function renderGrid() {
   const grid = document.getElementById('tools-grid');
   grid.innerHTML = allTools.map((t, i) => {
-    const actions = !t.builtin ? `
+    const actions = (authed && !t.builtin) ? `
       <div class="card-actions">
         <button class="card-edit" onclick="editTool(${i}, event)">✎</button>
         <button class="card-remove" onclick="removeTool(${i}, event)">✕</button>
@@ -282,16 +380,20 @@ function renderGrid() {
       : t.favicon
         ? `<img class="tool-favicon" src="${t.favicon}" alt="" onerror="this.style.visibility='hidden'" />`
         : `<div class="tool-icon">🔗</div>`;
-    const count = clickCounts[t.url] || 0;
+    const locked = !t.url;
+    const link = locked
+      ? 'href="#"'
+      : `href="${t.url}" ${t.url.startsWith('http') ? 'target="_blank" rel="noopener"' : ''}`;
     return `
-      <a class="tool-card" data-idx="${i}" href="${t.url}" onclick="recordClick('${t.url}')" ${t.url.startsWith('http') ? 'target="_blank" rel="noopener"' : ''}>
+      <a class="tool-card${locked ? ' locked' : ''}" data-idx="${i}" ${link}>
         ${actions}
+        ${locked ? '<span class="lock-badge">🔒</span>' : ''}
         ${iconEl}
         <div class="tool-name">${t.name}</div>
         <div class="tool-desc">${t.desc}</div>
         ${t.tag ? `<span class="tool-tag">${t.tag}</span>` : ''}
-        ${count ? `<span class="click-count">${count}</span>` : ''}
-        <span class="drag-handle">⠿</span>
+        ${t.clicks ? `<span class="click-count">${t.clicks}</span>` : ''}
+        ${authed ? '<span class="drag-handle">⠿</span>' : ''}
       </a>`;
   }).join('');
 }
@@ -394,8 +496,28 @@ document.getElementById('url-input').addEventListener('keydown', e => {
   if (e.key === 'Enter') fetchMeta();
 });
 
-Promise.all([loadTools(), loadClicks()]).then(() => {
-  renderGrid();
+document.getElementById('login-pw').addEventListener('keydown', e => {
+  if (e.key === 'Enter') doLogin();
+});
+
+document.getElementById('login-modal').addEventListener('click', e => {
+  if (e.target.id === 'login-modal') closeLogin();
+});
+
+document.getElementById('tools-grid').addEventListener('click', e => {
+  if (e.target.closest('.card-actions')) return;
+  const card = e.target.closest('.tool-card');
+  if (!card) return;
+  const tool = allTools[Number(card.dataset.idx)];
+  if (!tool.url) {
+    e.preventDefault();
+    openLogin();
+    return;
+  }
+  recordClick(tool.url);
+});
+
+function initSortable() {
   Sortable.create(document.getElementById('tools-grid'), {
     animation: 150,
     handle: '.drag-handle',
@@ -408,7 +530,16 @@ Promise.all([loadTools(), loadClicks()]).then(() => {
       await saveTools();
     },
   });
-});
+}
+
+loadSession()
+  .then(loadTools)
+  .then(() => {
+    applyAuthUI();
+    renderGrid();
+    if (authed) initSortable();
+    else if (new URLSearchParams(location.search).has('login')) openLogin();
+  });
 </script>
 
 </body>

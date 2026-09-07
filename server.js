@@ -1,10 +1,16 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const fetch = require('node-fetch');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Shared password gate. Without SITE_PASSWORD nobody can log in (fail closed).
+const SITE_PASSWORD = process.env.SITE_PASSWORD || '';
+const AUTH_COOKIE = 'qp_auth';
+const SESSION_MS = 30 * 24 * 60 * 60 * 1000;
 
 // Storage: Postgres if DATABASE_URL is set, otherwise file-based
 let usePostgres = false;
@@ -86,27 +92,113 @@ async function setData(key, value) {
   fileWrite(FILE_BY_KEY[key] || TOOLS_FILE, value);
 }
 
-// --- Express ---
-app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+// --- Auth ---
+function safeEqual(a, b) {
+  const ab = Buffer.from(String(a));
+  const bb = Buffer.from(String(b));
+  return ab.length === bb.length && crypto.timingSafeEqual(ab, bb);
+}
 
-app.get('/api/tools', async (req, res) => {
-  try { res.json(await getData('tools', [])); }
-  catch (e) { res.status(500).json({ error: e.message }); }
+// Signed with the password itself, so changing it revokes every live session.
+function signExpiry(exp) {
+  return crypto.createHmac('sha256', SITE_PASSWORD).update(String(exp)).digest('hex');
+}
+
+function issueToken() {
+  const exp = Date.now() + SESSION_MS;
+  return `${exp}.${signExpiry(exp)}`;
+}
+
+function tokenValid(token) {
+  if (!SITE_PASSWORD || !token) return false;
+  const [expStr, sig = ''] = String(token).split('.');
+  const exp = Number(expStr);
+  if (!exp || Date.now() > exp) return false;
+  return safeEqual(sig, signExpiry(exp));
+}
+
+function readCookie(req, name) {
+  for (const part of (req.headers.cookie || '').split(';')) {
+    const eq = part.indexOf('=');
+    if (eq < 0) continue;
+    if (part.slice(0, eq).trim() === name) return decodeURIComponent(part.slice(eq + 1));
+  }
+  return null;
+}
+
+function isAuthed(req) {
+  return tokenValid(readCookie(req, AUTH_COOKIE));
+}
+
+function requireAuth(req, res, next) {
+  if (isAuthed(req)) return next();
+  res.status(401).json({ error: 'unauthorized' });
+}
+
+// --- Express ---
+app.set('trust proxy', 1);
+app.use(express.json());
+
+app.post('/api/login', (req, res) => {
+  if (!SITE_PASSWORD) return res.status(503).json({ error: 'SITE_PASSWORD not configured' });
+  const { password } = req.body || {};
+  if (!password || !safeEqual(password, SITE_PASSWORD)) {
+    return res.status(401).json({ error: 'invalid password' });
+  }
+  res.cookie(AUTH_COOKIE, issueToken(), {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: req.secure,
+    maxAge: SESSION_MS,
+  });
+  res.json({ ok: true });
 });
 
-app.post('/api/tools', async (req, res) => {
+app.post('/api/logout', (req, res) => {
+  res.clearCookie(AUTH_COOKIE, { httpOnly: true, sameSite: 'lax', secure: req.secure });
+  res.json({ ok: true });
+});
+
+app.get('/api/session', (req, res) => {
+  res.json({ authed: isAuthed(req), configured: Boolean(SITE_PASSWORD) });
+});
+
+// The dashboard is the one linked app on this server, so it can actually be gated.
+app.use('/dashboard', (req, res, next) => {
+  if (isAuthed(req)) return next();
+  res.redirect('/?login=1');
+});
+
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Anonymous visitors see every card but never receive a destination URL.
+app.get('/api/tools', async (req, res) => {
+  try {
+    const tools = await getData('tools', []);
+    const clicks = await getData('clicks', {});
+    const authed = isAuthed(req);
+    res.json(tools.map(t => ({
+      ...t,
+      url: authed ? t.url : null,
+      favicon: authed ? t.favicon : null,
+      locked: !authed,
+      clicks: clicks[t.url] || 0,
+    })));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/tools', requireAuth, async (req, res) => {
   if (!Array.isArray(req.body)) return res.status(400).json({ error: 'array expected' });
   try { await setData('tools', req.body); res.json({ ok: true }); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.get('/api/clicks', async (req, res) => {
+app.get('/api/clicks', requireAuth, async (req, res) => {
   try { res.json(await getData('clicks', {})); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.post('/api/clicks', async (req, res) => {
+app.post('/api/clicks', requireAuth, async (req, res) => {
   const { url } = req.body || {};
   if (!url) return res.status(400).json({ error: 'url required' });
   try {
@@ -122,13 +214,13 @@ app.get('/api/channels', async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.post('/api/channels', async (req, res) => {
+app.post('/api/channels', requireAuth, async (req, res) => {
   if (!Array.isArray(req.body)) return res.status(400).json({ error: 'array expected' });
   try { await setData('channels', req.body); res.json({ ok: true }); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.get('/api/meta', async (req, res) => {
+app.get('/api/meta', requireAuth, async (req, res) => {
   const { url } = req.query;
   if (!url) return res.status(400).json({ error: 'url required' });
   try {
@@ -160,6 +252,9 @@ app.get('/api/meta', async (req, res) => {
 });
 
 async function start() {
+  if (!SITE_PASSWORD) {
+    console.warn('WARNING: SITE_PASSWORD is not set — login is disabled and every tool URL stays hidden.');
+  }
   if (usePostgres) {
     try {
       await initDb();
